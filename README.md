@@ -9,11 +9,7 @@ Kelley](https://mobile.twitter.com/andy_kelley/status/1470338795266457600).
 ## Getting started
 
 1. Generate the `abilists` file in `deps/glibc-abi-tool`.
-  1. Change your working directory to `deps/glibc-abi-tool`.
-  2. Run `zig run ./deps/glibc`.
-2. Run `cargo test` to check that you're generating the same output as the
-  snapshot test in `tests/snapshot.rs`.
-  1. We use [`cargo-insta`](https://insta.rs/) to generate new snapshots -- if
-	you plan on doing anything to change the emitted output of a parsed
-	`AbiList`, then you'll need to install it.
-3. 🎉Congrats, you're ready to start hacking on this project!
+  1. Install the latest [Zig toolchain](https://ziglang.org/).
+  2. Change your working directory to `deps/glibc-abi-tool`.
+  3. Run `zig run consolidate.zig`.
+2. 🎉Congrats, you're ready to start hacking on this project!
