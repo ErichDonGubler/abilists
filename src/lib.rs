@@ -24,29 +24,6 @@ pub type AbiListParseError = color_eyre::eyre::Error;
 
 impl AbiList {
     pub fn from_reader(mut reader: &mut dyn BufRead) -> Result<Self, AbiListParseError> {
-        fn parse_nul_term_ascii(
-            file: &mut dyn BufRead,
-            what: &dyn Display,
-        ) -> Result<AsciiString, AbiListParseError> {
-            let mut buf = Vec::new();
-            file.read_until(0, &mut buf)
-                .wrap_err_with(|| eyre!("failed to read {what}"))?;
-            let err = |reason| eyre!("unexpected end of file while parsing {what}; {reason}");
-            match buf.last() {
-                Some(0) => {
-                    buf.pop();
-                }
-                Some(byte) => {
-                    return Err(err(format_args!(
-                        "expected null terminator, found {byte:02X}"
-                    )))
-                }
-                None => return Err(err(format_args!("no more bytes"))),
-            };
-            log::trace!("attempting to parse symbol name from {:X?}", buf);
-            AsciiString::from_ascii(buf).wrap_err_with(|| eyre!("failed to parse {what} as ASCII"))
-        }
-
         let lib_names = {
             let mut lib_names = ArrayVec::<ArcStr, 8>::new();
             let num_lib_names: u8 = reader
@@ -366,4 +343,27 @@ impl<'a> GlibcFunctionInclusion<'a> {
             .filter(|target_idx| self.inclusion.targets_bitmask & (1 << target_idx) != 0)
             .map(|target_idx| &self.targets[target_idx])
     }
+}
+
+fn parse_nul_term_ascii(
+    file: &mut dyn BufRead,
+    what: &dyn Display,
+) -> Result<AsciiString, AbiListParseError> {
+    let mut buf = Vec::new();
+    file.read_until(0, &mut buf)
+        .wrap_err_with(|| eyre!("failed to read {what}"))?;
+    let err = |reason| eyre!("unexpected end of file while parsing {what}; {reason}");
+    match buf.last() {
+        Some(0) => {
+            buf.pop();
+        }
+        Some(byte) => {
+            return Err(err(format_args!(
+                "expected null terminator, found {byte:02X}"
+            )))
+        }
+        None => return Err(err(format_args!("no more bytes"))),
+    };
+    log::trace!("attempting to parse symbol name from {:X?}", buf);
+    AsciiString::from_ascii(buf).wrap_err_with(|| eyre!("failed to parse {what} as ASCII"))
 }
