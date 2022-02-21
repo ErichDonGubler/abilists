@@ -24,7 +24,10 @@ pub type AbiListParseError = color_eyre::eyre::Error;
 
 impl AbiList {
     pub fn from_reader(mut reader: &mut dyn BufRead) -> Result<Self, AbiListParseError> {
-        let parse_nul_term_ascii = |file: &mut dyn BufRead, what: &dyn Display| {
+        fn parse_nul_term_ascii(
+            file: &mut dyn BufRead,
+            what: &dyn Display,
+        ) -> Result<AsciiString, AbiListParseError> {
             let mut buf = Vec::new();
             file.read_until(0, &mut buf)
                 .wrap_err_with(|| eyre!("failed to read {what}"))?;
@@ -42,7 +45,7 @@ impl AbiList {
             };
             log::trace!("attempting to parse symbol name from {:X?}", buf);
             AsciiString::from_ascii(buf).wrap_err_with(|| eyre!("failed to parse {what} as ASCII"))
-        };
+        }
 
         let lib_names = {
             let mut lib_names = ArrayVec::<ArcStr, 8>::new();
