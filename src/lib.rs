@@ -204,7 +204,7 @@ impl AbiList {
                         version_idx_idx += 1;
                     }
 
-                    inclusions.push(UnsizedInclusion {
+                    inclusions.push(Inclusion {
                         targets_bitmask,
                         library,
                         versions: inclusion_versions.into_iter().collect(),
@@ -212,10 +212,10 @@ impl AbiList {
                     num_inclusions_found += 1;
                 }
 
-                functions.push(Function {
+                functions.push(Function(SymbolInclusions {
                     symbol_name,
                     inclusions,
-                });
+                }));
                 num_functions_found += 1;
             }
 
@@ -291,13 +291,16 @@ impl<'a> GlibcFunctions<'a> {
 }
 
 #[derive(Debug)]
-pub struct Function {
+pub struct Function(SymbolInclusions);
+
+#[derive(Debug)]
+struct SymbolInclusions {
     symbol_name: ArcStr,
-    inclusions: Vec<UnsizedInclusion>,
+    inclusions: Vec<Inclusion>,
 }
 
 #[derive(Debug)]
-pub struct UnsizedInclusion {
+struct Inclusion {
     targets_bitmask: u32,
     library: ArcStr,
     versions: Vec<GlibcVersion>, // OPT: the buffer upstream is set to size `50`, maybe useful?
@@ -310,23 +313,28 @@ pub struct GlibcFunction<'a> {
 
 impl<'a> GlibcFunction<'a> {
     pub fn symbol_name(&self) -> &str {
-        &self.func.symbol_name
+        let Self {
+            func: Function(SymbolInclusions { symbol_name, .. }),
+            ..
+        } = self;
+        symbol_name
     }
 
     pub fn inclusions(&self) -> impl Iterator<Item = GlibcFunctionInclusion<'a>> + '_ {
-        self.func
-            .inclusions
-            .iter()
-            .map(|inclusion| GlibcFunctionInclusion {
-                targets: self.targets,
-                inclusion,
-            })
+        let Self {
+            func: Function(SymbolInclusions { inclusions, .. }),
+            ..
+        } = self;
+        inclusions.iter().map(|inclusion| GlibcFunctionInclusion {
+            targets: self.targets,
+            inclusion,
+        })
     }
 }
 
 pub struct GlibcFunctionInclusion<'a> {
     targets: &'a [ArcStr],
-    inclusion: &'a UnsizedInclusion,
+    inclusion: &'a Inclusion,
 }
 
 impl<'a> GlibcFunctionInclusion<'a> {
