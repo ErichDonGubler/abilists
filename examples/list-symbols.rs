@@ -103,7 +103,26 @@ fn main() -> color_eyre::eyre::Result<()> {
         })
     });
 
-    // TODO: objects
+    println!("Objects:");
+    abi_list.objects().iter().for_each(|obj| {
+        obj.inclusions().for_each(|inclusion| {
+            println!(" {}:", obj.symbol_name());
+            println!("  size: {}", inclusion.size());
+            println!("  library: {}", GlibcLibraryName(inclusion.library()));
+
+            print!("  versions:");
+            inclusion.versions().iter().for_each(|version| {
+                print!(" {}", version_display(version.clone()));
+            });
+            println!();
+
+            print!("  targets:");
+            inclusion.targets().for_each(|target| {
+                print!(" {target}");
+            });
+            println!();
+        })
+    });
 
     Ok(())
 }
