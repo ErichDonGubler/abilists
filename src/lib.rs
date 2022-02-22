@@ -13,6 +13,7 @@ pub struct AbiList {
     versions: ArrayVec<GlibcVersion, 64>,
     targets: ArrayVec<ArcStr, 32>,
     functions: Vec<Function>,
+    objects: Vec<Object>,
 }
 
 // TODO
@@ -124,11 +125,36 @@ impl AbiList {
             .collect::<Result<_, _>>()?
         };
 
-        // TODO: objects
+        let objects = {
+            struct ObjectDataParser;
+            impl InclusionDataParser for ObjectDataParser {
+                type Data = ObjectData;
+
+                fn type_desc_singular(&self) -> &str {
+                    "object"
+                }
+
+                fn type_desc_plural(&self) -> &str {
+                    "objects"
+                }
+
+                fn parse(
+                    &mut self,
+                    mut reader: &mut dyn BufRead,
+                ) -> Result<Self::Data, AbiListParseError> {
+                    let size = reader.read_le().wrap_err("failed to read object size")?;
+                    Ok(ObjectData { size })
+                }
+            }
+            SymbolInclusions::parse_set(reader, &targets, &lib_names, &versions, ObjectDataParser)?
+                .map(|inc_res| inc_res.map(|inc| Object(inc)))
+                .collect::<Result<_, _>>()?
+        };
 
         Ok(AbiList {
             functions,
             lib_names,
+            objects,
             targets,
             versions,
         })
@@ -161,6 +187,13 @@ impl AbiList {
         } = self;
         GlibcFunctions { targets, functions }
     }
+
+    pub fn objects(&self) -> GlibcObjects<'_> {
+        let Self {
+            targets, objects, ..
+        } = self;
+        GlibcObjects { targets, objects }
+    }
 }
 
 pub struct GlibcFunctions<'a> {
@@ -192,6 +225,41 @@ impl<'a> GlibcFunctions<'a> {
 
 #[derive(Debug)]
 struct Function(SymbolInclusions<()>);
+
+pub struct GlibcObjects<'a> {
+    targets: &'a [ArcStr],
+    objects: &'a [Object],
+}
+
+impl<'a> GlibcObjects<'a> {
+    pub fn len(&self) -> u16 {
+        self.objects
+            .len()
+            .try_into()
+            .expect("internal error: length out of `u16` bounds")
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = GlibcObject<'a>> + '_ {
+        (0..self.len()).map(|idx| self.get(idx).unwrap())
+    }
+
+    pub fn get(&self, index: u16) -> Option<GlibcObject<'a>> {
+        self.objects
+            .get(usize::from(index))
+            .map(|func| GlibcObject {
+                targets: self.targets,
+                func,
+            })
+    }
+}
+
+#[derive(Debug)]
+struct Object(SymbolInclusions<ObjectData>);
+
+#[derive(Debug)]
+pub struct ObjectData {
+    size: u16,
+}
 
 #[derive(Debug)]
 struct SymbolInclusions<T> {
@@ -373,7 +441,7 @@ trait InclusionDataParser {
 #[derive(Debug)]
 struct Inclusion<T> {
     targets_bitmask: u32,
-    _data: T,
+    data: T,
     library: ArcStr,
     versions: Vec<GlibcVersion>, // OPT: the buffer upstream is set to size `50`, maybe useful?
 }
@@ -416,6 +484,57 @@ impl<'a> GlibcFunctionInclusion<'a> {
 
     pub fn versions(&self) -> &[GlibcVersion] {
         &self.inclusion.versions
+    }
+
+    pub fn targets(&self) -> impl Iterator<Item = &ArcStr> {
+        (0..self.targets.len())
+            .filter(|target_idx| self.inclusion.targets_bitmask & (1 << target_idx) != 0)
+            .map(|target_idx| &self.targets[target_idx])
+    }
+}
+
+pub struct GlibcObject<'a> {
+    targets: &'a [ArcStr],
+    func: &'a Object,
+}
+
+impl<'a> GlibcObject<'a> {
+    pub fn symbol_name(&self) -> &str {
+        let Self {
+            func: Object(SymbolInclusions { symbol_name, .. }),
+            ..
+        } = self;
+        symbol_name
+    }
+
+    pub fn inclusions(&self) -> impl Iterator<Item = GlibcObjectInclusion<'a>> + '_ {
+        let Self {
+            func: Object(SymbolInclusions { inclusions, .. }),
+            ..
+        } = self;
+        inclusions.iter().map(|inclusion| GlibcObjectInclusion {
+            targets: self.targets,
+            inclusion,
+        })
+    }
+}
+
+pub struct GlibcObjectInclusion<'a> {
+    targets: &'a [ArcStr],
+    inclusion: &'a Inclusion<ObjectData>,
+}
+
+impl<'a> GlibcObjectInclusion<'a> {
+    pub fn library(&self) -> &str {
+        &self.inclusion.library
+    }
+
+    pub fn versions(&self) -> &[GlibcVersion] {
+        &self.inclusion.versions
+    }
+
+    pub fn size(&self) -> u16 {
+        self.inclusion.data.size
     }
 
     pub fn targets(&self) -> impl Iterator<Item = &ArcStr> {
