@@ -1,5 +1,8 @@
 [package]
+description = "Parse `abilists` files from the Zig project."
+license = "MIT"
 name = "abilists"
+repository = "https://github.com/ErichDonGubler/abilists"
 version = "0.1.0"
 edition = "2021"
 
