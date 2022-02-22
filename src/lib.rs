@@ -191,7 +191,7 @@ impl<'a> GlibcFunctions<'a> {
 }
 
 #[derive(Debug)]
-pub struct Function(SymbolInclusions<()>);
+struct Function(SymbolInclusions<()>);
 
 #[derive(Debug)]
 struct SymbolInclusions<T> {
